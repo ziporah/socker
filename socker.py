@@ -64,6 +64,7 @@ def main(argv):
     img = None
     cmd = None
     slurm_job_id = None
+    torque_jobid = None
     verbose = False
     dockerv = None
     dockeruid = None
@@ -92,13 +93,20 @@ def main(argv):
     PWD = os.getcwd()
     cid = str(uuid.uuid4())
     home = pwd.getpwuid(user).pw_dir
-    #print 'current UID: ',os.getuid(),'\t Current GID: ',os.getgid()
-    #print 'Home dir:',home
+    print 'current UID: ',os.getuid(),'\t Current GID: ',os.getgid()
+    print 'Home dir:',home
     try:
         slurm_job_id = os.environ['SLURM_JOB_ID']
         print 'Slurm job id', slurm_job_id
     except KeyError as e:
         #print e,slurm_job_id
+        pass
+    try:
+			  #  PBS_JOBID=40145520.moab.tier1.hpc.kuleuven.be
+        torque_jobid = os.environ['PBS_JOBID']
+        print 'Torque job id', torque_jobid
+    except KeyError as e:
+        print e,torque_jobid
         pass
     
     # Set the user to root
@@ -124,7 +132,7 @@ def main(argv):
     
     # Get the list of autherized images
     try:
-        images = filter(None,[line.strip() for line in open('/cluster/tmp/socker-images','r')])
+        images = filter(None,[line.strip() for line in open('/var/lib/docker/icts/socker-images','r')])
         if len(images) == 0:
             raise Exception()
     except:
@@ -226,18 +234,15 @@ def main(argv):
     subprocess.Popen('docker wait '+cid, shell=True, stdout=subprocess.PIPE).stdout.read()
     
     # After the container exit's, capture it's output
-    clog = subprocess.Popen("docker inspect -f '{{.LogPath}}' "+str(cid), shell=True, stdout=subprocess.PIPE).stdout.read().rstrip()
-    with open(clog,'r') as f:
-        if verbose:
-            print 'container output:\n'
-        for line in f:
-            d = eval(line.replace('\n',''))
-            if d['stream'] == 'stderr':
-                sys.stdout.write('#Error: '+d['log'])
-            else:
-                sys.stdout.write(d['log'])
+    clog = subprocess.Popen("docker logs "+str(cid), shell=True, stdout=subprocess.PIPE).stdout.read()
+    # with open(clog,'r') as f:
+    if verbose:
+      print 'container output:\n'
+    for line in clog:
+      line.replace('\n','')
+      sys.stdout.write(line)
     if verbose:        
-        print '\nremoving the container...\n'
+      print '\nremoving the container...\n'
     subprocess.Popen('docker rm '+cid, shell=True, stdout=subprocess.PIPE).stdout.read()
 
 if __name__ == "__main__":
